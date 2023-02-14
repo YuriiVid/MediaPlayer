@@ -1,10 +1,11 @@
 using MusicPlayer.Properties;
 using LibVLCSharp.Shared;
-using System.IO;
+using System;
 using System.Threading;
 using System.Reflection;
 using System.Timers;
 using System.Globalization;
+using System.ComponentModel;
 
 namespace MusicPlayer
 {
@@ -16,30 +17,34 @@ namespace MusicPlayer
 
 		private bool _isFullScreen = false;
 		private int _previousVolume;
-		private Size oldFormSize;
-		private Size oldVideoSize;
-		private Point oldVideoLocation;
+		private Size _oldFormSize;
+		private Size _oldVideoSize;
+		private Point _oldVideoLocation;
 
 		public MusicPlayerApp()
 		{
 			InitializeComponent();
 			Core.Initialize();
-			oldVideoSize = videoView1.Size;
-			oldFormSize = Size;
-			oldVideoLocation = videoView1.Location;
+			_oldVideoSize = videoView1.Size;
+			_oldFormSize = Size;
+			_oldVideoLocation = videoView1.Location;
 			//VLC 
 			_libVLC = new LibVLC();
 			_mp = new MediaPlayer(_libVLC);
 			videoView1.MediaPlayer = _mp;
 			_mp.Volume = _previousVolume = 50;
 			_mp.EndReached += _mp_EndReached;
-
 			KeyPreview = true;
 			KeyDown += new KeyEventHandler(ShortcutEvent);
 		}
-
+		
+		//Event handler for various shortcuts
 		public void ShortcutEvent(object sender, KeyEventArgs e)
 		{
+			Keys[] keys = {Keys.Escape, Keys.F, Keys.F12, Keys.M, Keys.Right, Keys.Left, Keys.Space };
+			if(!keys.Contains(e.KeyCode))
+				return;
+			
 			if (e.KeyCode == Keys.Escape && _isFullScreen) // from fullscreen to window
 			{
 				ExitFullScreen();
@@ -56,7 +61,10 @@ namespace MusicPlayer
 			}
 
 			if (e.KeyCode == Keys.M)
+			{
 				VolumeOnOffButton_Click(sender, e);
+				return;
+			}
 
 			if (IsMediaSelected())
 			{
@@ -88,6 +96,7 @@ namespace MusicPlayer
 			}
 		}
 
+		// Make player fullscreen
 		private void GoFullScreen()
 		{
 			menuStrip1.Visible = false; // goodbye menu strip
@@ -98,24 +107,23 @@ namespace MusicPlayer
 			_isFullScreen = true;
 		}
 
+		// Make player exit fullscreen
 		private void ExitFullScreen()
 		{
 			FormBorderStyle = FormBorderStyle.Sizable; // change form style
 			WindowState = FormWindowState.Normal; // back to normal size
-			Size = oldFormSize;
+			Size = _oldFormSize;
 			menuStrip1.Visible = true; // the return of the menu strip 
-			videoView1.Size = oldVideoSize; // make video the same size as the form
-			videoView1.Location = oldVideoLocation; // remove the offset
+			videoView1.Size = _oldVideoSize; // make video the same size as the form
+			videoView1.Location = _oldVideoLocation; // remove the offset
 			_isFullScreen = false;
 		}
 
+		// Event handler for reaching the end of the media
 		private void _mp_EndReached(object? sender, EventArgs e)
 		{
 			ThreadPool.QueueUserWorkItem(_ => _mp.Stop());
-			PlayPauseButton.Image = Resources.play;
-			timer1.Stop();
-			progressBar1.Value = 0;
-			TimeElapsed.Text = "00:00";
+			this.InvokeEx(f => f.Reset());
 		}
 
 		private void PlayPauseButton_Click(object sender, EventArgs e)
@@ -166,6 +174,11 @@ namespace MusicPlayer
 		private void Stop()
 		{
 			_mp.Stop();
+			Reset();
+		}
+
+		private void Reset()
+		{
 			PlayPauseButton.Image = Resources.play;
 			timer1.Stop();
 			progressBar1.Value = 0;
@@ -222,8 +235,8 @@ namespace MusicPlayer
 
 			if (ofd.ShowDialog() == DialogResult.OK)
 			{
-				Stop();
 				_media = new Media(_libVLC, ofd.FileName, FromType.FromPath);
+				Reset();
 			}
 			else
 			{
